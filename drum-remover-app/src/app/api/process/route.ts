@@ -46,7 +46,7 @@ async function processAudio(jobId: string, videoId: string, title: string) {
   const job = jobs.get(jobId);
   if (!job) return;
 
-  const homedir = process.env.HOME || "/home/eleven";
+  const homedir = process.env.HOME || "/drum-remover-app";
   // Use /tmp for Vercel/Serverless environments
   const audioDir = process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "public", "audio");
   const demucsOutputDir = path.join(audioDir, "separated");
@@ -68,7 +68,7 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     console.log(`Downloading audio from: ${youtubeUrl}`);
 
     // Use the updated yt-dlp with EJS support for YouTube bot detection
-    const ytdlpPath = process.env.YTDLP_PATH || `/yt_dlp/yt-dlp`;
+    const ytdlpPath = process.env.YTDLP_PATH || `${homedir}/yt-dlp`;
     const ytdlpCommand = `${ytdlpPath} --remote-components ejs:npm -x --audio-format mp3 --audio-quality 0 -o "${inputFile}" "${youtubeUrl}"`;
 
     const { stdout: ytdlpOut, stderr: ytdlpErr } = await execAsync(ytdlpCommand, {
