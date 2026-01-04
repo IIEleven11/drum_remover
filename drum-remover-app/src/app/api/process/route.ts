@@ -67,8 +67,20 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
     console.log(`Downloading audio from: ${youtubeUrl}`);
 
-    // Use the updated yt-dlp with EJS support for YouTube bot detection
-    const ytdlpPath = process.env.YTDLP_PATH || `${homedir}/yt-dlp`;
+    // Determine yt-dlp path:
+    // 1. Env var YTDLP_PATH
+    // 2. Local binary in yt_dlp folder (relative to cwd)
+    // 3. System command 'yt-dlp' (for Docker/Global install)
+    let ytdlpPath = process.env.YTDLP_PATH;
+    if (!ytdlpPath) {
+      const localBinary = path.join(process.cwd(), "yt_dlp", "yt-dlp");
+      if (fs.existsSync(localBinary)) {
+        ytdlpPath = localBinary;
+      } else {
+        ytdlpPath = "yt-dlp"; // Fallback to system command
+      }
+    }
+    
     const ytdlpCommand = `${ytdlpPath} --remote-components ejs:npm -x --audio-format mp3 --audio-quality 0 -o "${inputFile}" "${youtubeUrl}"`;
 
     const { stdout: ytdlpOut, stderr: ytdlpErr } = await execAsync(ytdlpCommand, {
@@ -91,9 +103,18 @@ async function processAudio(jobId: string, videoId: string, title: string) {
 
     console.log("Processing with Demucs (this may take a few minutes)...");
 
-    // Use the virtual environment's demucs
+    // Determine Demucs command:
+    // 1. Virtual Environment (local dev)
+    // 2. System command (Docker/Global install)
     const venvPath = `${homedir}/.drum-remover-venv`;
-    const demucsCommand = `source ${venvPath}/bin/activate && python -m demucs --two-stems drums -o "${demucsOutputDir}" "${inputFile}"`;
+    let demucsCommand;
+    
+    if (fs.existsSync(path.join(venvPath, "bin", "activate"))) {
+       demucsCommand = `source ${venvPath}/bin/activate && python -m demucs --two-stems drums -o "${demucsOutputDir}" "${inputFile}"`;
+    } else {
+       // Assume system install (e.g. Docker)
+       demucsCommand = `demucs --two-stems drums -o "${demucsOutputDir}" "${inputFile}"`;
+    }
 
     const { stdout: demucsOut, stderr: demucsErr } = await execAsync(demucsCommand, {
       timeout: 1800000, // 30 min timeout for processing
