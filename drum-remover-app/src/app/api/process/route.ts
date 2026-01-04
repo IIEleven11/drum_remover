@@ -113,7 +113,11 @@ async function processAudio(jobId: string, videoId: string, title: string) {
        demucsCommand = `source ${venvPath}/bin/activate && python -m demucs --two-stems drums -o "${demucsOutputDir}" "${inputFile}"`;
     } else {
        // Assume system install (e.g. Docker)
-       demucsCommand = `demucs --two-stems drums -o "${demucsOutputDir}" "${inputFile}"`;
+       // Use -j 0 to disable multiprocessing (saves memory)
+       // Use --segment 10 (default is often larger, keeping it reasonable) or smaller if needed
+       // But the biggest win for memory is usually limiting threads.
+       // Also, htdemucs is the default model.
+       demucsCommand = `demucs -j 0 --two-stems drums -o "${demucsOutputDir}" "${inputFile}"`;
     }
 
     const { stdout: demucsOut, stderr: demucsErr } = await execAsync(demucsCommand, {
