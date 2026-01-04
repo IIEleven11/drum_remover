@@ -1,3 +1,5 @@
 *.mp3
 /drum-remover-app/node_modules
 /drum-remover-app/.next
+/drum-remover-app/personal_video
+drum-remover-app/public/me_and_father.webm

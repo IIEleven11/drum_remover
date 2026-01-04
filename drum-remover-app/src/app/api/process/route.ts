@@ -68,7 +68,7 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     console.log(`Downloading audio from: ${youtubeUrl}`);
 
     // Use the updated yt-dlp with EJS support for YouTube bot detection
-    const ytdlpPath = process.env.YTDLP_PATH || `${homedir}/.local/bin/yt-dlp`;
+    const ytdlpPath = process.env.YTDLP_PATH || `/home/eleven/ElevenLLM.dev_V2/dads_section/drum-remover-app/yt_dlp/yt-dlp`;
     const ytdlpCommand = `${ytdlpPath} --remote-components ejs:npm -x --audio-format mp3 --audio-quality 0 -o "${inputFile}" "${youtubeUrl}"`;
 
     const { stdout: ytdlpOut, stderr: ytdlpErr } = await execAsync(ytdlpCommand, {
