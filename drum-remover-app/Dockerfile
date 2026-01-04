@@ -1,5 +1,5 @@
 # Use a base image that has both Node and Python capabilities
-FROM node:20-bookworm
+FROM nodejs:python3.12-nodejs20-bookworm
 
 # 1. Install System Dependencies (Python, FFmpeg)
 RUN apt-get update && apt-get install -y \
