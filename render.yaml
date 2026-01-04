@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: drum-remover
+    runtime: docker
+    dockerContext: drum-remover-app
+    dockerfilePath: drum-remover-app/Dockerfile
+    envVars:
+      - key: PORT
+        value: 3000
