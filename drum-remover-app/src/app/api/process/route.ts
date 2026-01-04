@@ -47,7 +47,8 @@ async function processAudio(jobId: string, videoId: string, title: string) {
   if (!job) return;
 
   const homedir = process.env.HOME || "/home/eleven";
-  const audioDir = path.join(process.cwd(), "public", "audio");
+  // Use /tmp for Vercel/Serverless environments
+  const audioDir = process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "public", "audio");
   const demucsOutputDir = path.join(audioDir, "separated");
   const safeTitle = title.replace(/[^a-zA-Z0-9]/g, "_").substring(0, 50);
   const inputFile = path.join(audioDir, `${jobId}_input.mp3`);
@@ -167,7 +168,14 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     }
 
     job.status = "completed";
-    job.downloadUrl = `/audio/${path.basename(outputExists ? finalOutputFile : wavOutput)}`;
+    const finalFileName = path.basename(outputExists ? finalOutputFile : wavOutput);
+    
+    if (process.env.VERCEL) {
+      job.downloadUrl = `/api/download?file=${finalFileName}`;
+    } else {
+      job.downloadUrl = `/audio/${finalFileName}`;
+    }
+    
     jobs.set(jobId, job);
 
     console.log(`Processing complete! Download URL: ${job.downloadUrl}`);
