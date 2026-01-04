@@ -23,6 +23,9 @@ RUN npm install
 # 5. Copy the rest of your code
 COPY . .
 
+# Ensure the local yt-dlp binary is executable
+RUN chmod +x yt_dlp/yt-dlp
+
 # 6. Build the Next.js application
 RUN npm run build
 
