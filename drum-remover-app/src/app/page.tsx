@@ -74,7 +74,7 @@ export default function Home() {
       // Poll for status
       const jobId = data.jobId;
       setStep("processing");
-      setStatusMessage("SEPARATING AUDIO TRACKS...");
+      setStatusMessage("PLEASE WAIT, SEPARATING AUDIO TRACKS. THIS MAY TAKE A MINUTE.");
 
       const pollStatus = async () => {
         const statusRes = await fetch(`/api/status?jobId=${jobId}`);
@@ -208,6 +208,28 @@ export default function Home() {
           )}
 
         </div>
+
+        {/* Processing Video Overlay */}
+        {step === "processing" && (
+          <div className="mt-12 border border-accent/20 bg-black p-2 animate-fade-in relative flex justify-center">
+            <div className="absolute top-0 left-0 w-full h-1 bg-accent/50 animate-pulse"></div>
+            <div className="relative overflow-hidden bg-neutral-900 max-w-[252px]">
+              <video
+                src="/me_and_father.webm"
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full h-auto opacity-80"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-6">
+                <div className="font-mono text-xs text-accent uppercase tracking-widest animate-pulse">
+                  /// PROCESSING AUDIO STREAMS ///
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Results List */}
         {searchResults.length > 0 && step === "idle" && (
