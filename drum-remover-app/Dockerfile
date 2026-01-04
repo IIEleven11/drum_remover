@@ -1,5 +1,5 @@
 # Use a base image that has both Node and Python capabilities
-FROM nodejs:python3.12-nodejs20-bookworm
+FROM node:20-bookworm
 
 # 1. Install System Dependencies (Python, FFmpeg)
 RUN apt-get update && apt-get install -y \
@@ -10,8 +10,9 @@ RUN apt-get update && apt-get install -y \
 
 # 2. Install Python Tools (Demucs for drums, yt-dlp for downloading)
 # Install CPU-only version of PyTorch to save space and build time
-RUN pip3 install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-RUN pip3 install -U demucs yt-dlp
+# Note: --break-system-packages is needed for Debian 12+ (Bookworm) inside containers
+RUN pip3 install torch torchaudio --index-url https://download.pytorch.org/whl/cpu --break-system-packages
+RUN pip3 install -U demucs yt-dlp --break-system-packages
 
 # 3. Set up the App Directory
 WORKDIR /app
