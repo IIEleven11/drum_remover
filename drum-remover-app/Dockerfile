@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Install Python Tools (Demucs for drums, yt-dlp for downloading)
+# Install CPU-only version of PyTorch to save space and build time
+RUN pip3 install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 RUN pip3 install -U demucs yt-dlp
 
 # 3. Set up the App Directory
