@@ -114,10 +114,9 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     } else {
        // Assume system install (e.g. Docker)
        // Use -j 0 to disable multiprocessing (saves memory)
-       // Use --segment 10 (default is often larger, keeping it reasonable) or smaller if needed
-       // But the biggest win for memory is usually limiting threads.
-       // Also, htdemucs is the default model.
-       demucsCommand = `demucs -j 0 --two-stems drums -o "${demucsOutputDir}" "${inputFile}"`;
+       // Use --segment 4 to reduce memory usage (default is 10)
+       // Use OMP_NUM_THREADS=1 to further restrict parallelism
+       demucsCommand = `export OMP_NUM_THREADS=1 && demucs -j 0 --segment 4 --two-stems drums -o "${demucsOutputDir}" "${inputFile}"`;
     }
 
     const { stdout: demucsOut, stderr: demucsErr } = await execAsync(demucsCommand, {
