@@ -1,0 +1,3 @@
+*.mp3
+/drum-remover-app/node_modules
+/drum-remover-app/.next
