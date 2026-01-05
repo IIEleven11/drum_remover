@@ -4,6 +4,8 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import path from "path";
 import fs from "fs";
+import { pipeline } from "stream/promises";
+import { Readable } from "stream";
 
 const execAsync = promisify(exec);
 
@@ -42,6 +44,80 @@ export async function POST(request: NextRequest) {
   }
 }
 
+async function downloadWithRapidApi(videoId: string, outputPath: string): Promise<boolean> {
+  const apiKey = process.env.RAPIDAPI_KEY;
+  const apiHost = process.env.RAPIDAPI_HOST || "youtube-search-and-download.p.rapidapi.com";
+
+  if (!apiKey) return false;
+
+  try {
+    console.log("Attempting download with RapidAPI...");
+
+    const url = `https://${apiHost}/video/download?id=${encodeURIComponent(videoId)}`;
+    const response = await fetch(url, {
+      headers: {
+        "x-rapidapi-host": apiHost,
+        "x-rapidapi-key": apiKey,
+        "accept": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      console.log(`RapidAPI download endpoint returned ${response.status}`);
+      return false;
+    }
+
+    const data: any = await response.json();
+
+    // RapidAPI responses vary; try a few common shapes.
+    // Prefer an audio-only URL when present.
+    const candidateUrls: string[] = [];
+    const pushUrl = (v: unknown) => {
+      if (typeof v === "string" && v.startsWith("http")) candidateUrls.push(v);
+    };
+
+    pushUrl(data?.link);
+    pushUrl(data?.url);
+    pushUrl(data?.downloadUrl);
+    pushUrl(data?.download_url);
+
+    const collectFromList = (list: any[]) => {
+      for (const item of list) {
+        pushUrl(item?.url);
+        pushUrl(item?.link);
+        pushUrl(item?.downloadUrl);
+      }
+    };
+
+    if (Array.isArray(data?.formats)) collectFromList(data.formats);
+    if (Array.isArray(data?.adaptiveFormats)) collectFromList(data.adaptiveFormats);
+    if (Array.isArray(data?.streams)) collectFromList(data.streams);
+    if (Array.isArray(data?.audioStreams)) collectFromList(data.audioStreams);
+
+    // Heuristic: pick first URL that looks like audio; else first URL.
+    const chosen =
+      candidateUrls.find((u) => /audio|mime=audio|\bm4a\b|\bmp3\b|\bwebm\b/i.test(u)) ||
+      candidateUrls[0];
+
+    if (!chosen) {
+      console.log("RapidAPI response did not contain a usable download URL");
+      return false;
+    }
+
+    const mediaRes = await fetch(chosen);
+    if (!mediaRes.ok || !mediaRes.body) {
+      console.log(`Failed to fetch media URL: ${mediaRes.status}`);
+      return false;
+    }
+
+    await pipeline(Readable.fromWeb(mediaRes.body as any), fs.createWriteStream(outputPath));
+    return fs.existsSync(outputPath);
+  } catch (error) {
+    console.log("RapidAPI download failed:", error);
+    return false;
+  }
+}
+
 async function processAudio(jobId: string, videoId: string, title: string) {
   const job = jobs.get(jobId);
   if (!job) return;
@@ -60,38 +136,46 @@ async function processAudio(jobId: string, videoId: string, title: string) {
       fs.mkdirSync(audioDir, { recursive: true });
     }
 
-    // Step 1: Download audio from YouTube using yt-dlp
+    // Step 1: Download audio from YouTube
     job.status = "downloading";
     jobs.set(jobId, job);
 
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
     console.log(`Downloading audio from: ${youtubeUrl}`);
 
-    // Determine yt-dlp path:
-    // 1. Env var YTDLP_PATH
-    // 2. Local binary in yt_dlp folder (relative to cwd)
-    // 3. System command 'yt-dlp' (for Docker/Global install)
-    let ytdlpPath = process.env.YTDLP_PATH;
-    if (!ytdlpPath) {
-      const localBinary = path.join(process.cwd(), "yt_dlp", "yt-dlp");
-      if (fs.existsSync(localBinary)) {
-        ytdlpPath = localBinary;
-      } else {
-        ytdlpPath = "yt-dlp"; // Fallback to system command
+    // Prefer RapidAPI on serverless (avoids bundling yt-dlp/deno and reduces bot-check issues)
+    // Set RAPIDAPI_KEY in Vercel env vars. Do NOT hardcode it.
+    let downloaded = await downloadWithRapidApi(videoId, inputFile);
+
+    // Fallback: yt-dlp (works in Docker/local, but typically not on Vercel)
+    if (!downloaded) {
+      // Determine yt-dlp path:
+      // 1. Env var YTDLP_PATH
+      // 2. Local binary in yt_dlp folder (relative to cwd)
+      // 3. System command 'yt-dlp' (for Docker/Global install)
+      let ytdlpPath = process.env.YTDLP_PATH;
+      if (!ytdlpPath) {
+        const localBinary = path.join(process.cwd(), "yt_dlp", "yt-dlp");
+        if (fs.existsSync(localBinary)) {
+          ytdlpPath = localBinary;
+        } else {
+          ytdlpPath = "yt-dlp"; // Fallback to system command
+        }
       }
+
+      const ytdlpCommand = `${ytdlpPath} --remote-components ejs:npm -x --audio-format mp3 --audio-quality 0 -o "${inputFile}" "${youtubeUrl}"`;
+
+      const { stdout: ytdlpOut, stderr: ytdlpErr } = await execAsync(ytdlpCommand, {
+        timeout: 600000, // 10 min timeout
+        env: { ...process.env, PATH: `${homedir}/.local/bin:${homedir}/.deno/bin:${process.env.PATH}` }
+      });
+
+      console.log("yt-dlp stdout:", ytdlpOut);
+      if (ytdlpErr) console.log("yt-dlp stderr:", ytdlpErr);
+      downloaded = fs.existsSync(inputFile);
     }
-    
-    const ytdlpCommand = `${ytdlpPath} --remote-components ejs:npm -x --audio-format mp3 --audio-quality 0 -o "${inputFile}" "${youtubeUrl}"`;
 
-    const { stdout: ytdlpOut, stderr: ytdlpErr } = await execAsync(ytdlpCommand, {
-      timeout: 600000, // 10 min timeout
-      env: { ...process.env, PATH: `${homedir}/.local/bin:${homedir}/.deno/bin:${process.env.PATH}` }
-    });
-
-    console.log("yt-dlp stdout:", ytdlpOut);
-    if (ytdlpErr) console.log("yt-dlp stderr:", ytdlpErr);
-
-    if (!fs.existsSync(inputFile)) {
+    if (!downloaded || !fs.existsSync(inputFile)) {
       throw new Error("Failed to download audio file");
     }
 

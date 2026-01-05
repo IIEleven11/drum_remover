@@ -30,8 +30,11 @@ RUN chmod +x yt_dlp/yt-dlp
 # 6. Build the Next.js application
 RUN npm run build
 
-# 7. Expose the port
-EXPOSE 3000
+# 7. Expose the port (Hugging Face Spaces requires port 7860)
+EXPOSE 7860
 
-# 8. Start the server
-CMD ["npm", "start"]
+# 8. Start the server on port 7860
+CMD ["npm", "start", "--", "-p", "7860"]
+
+# Modify the demucs command for faster execution
+RUN sed -i 's|demucs -j 0 --segment 4 --two-stems drums|demucs --two-stems drums -o "${demucsOutputDir}" "${inputFile}"|g' your_script_file.js
