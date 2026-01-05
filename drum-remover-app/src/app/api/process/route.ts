@@ -186,7 +186,8 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
   }
 
   try {
-    console.log("Attempting download with RapidAPI...");
+    const maskedKey = apiKey.length > 8 ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}` : "***";
+    console.log(`Attempting download with RapidAPI... Host: ${apiHost}, Key: ${maskedKey}`);
 
     const isYoutube138 = apiHost.includes("youtube138.p.rapidapi.com");
     const isYtApi = apiHost.includes("yt-api.p.rapidapi.com");
