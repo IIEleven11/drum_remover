@@ -1,10 +1,22 @@
 ---
 title: Drum Remover
+emoji: 👁
+colorFrom: yellow
+colorTo: gray
+sdk: docker
+pinned: false
+license: mit
+app_port: 7860
+short_description: remove drumbo
+---
+
+Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
 emoji: 🥁
 colorFrom: purple
 colorTo: blue
 sdk: docker
 pinned: false
+app_port: 7860
 ---
 
 # Drum Remover
