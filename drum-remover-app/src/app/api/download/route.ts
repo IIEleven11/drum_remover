@@ -10,6 +10,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Filename is required" }, { status: 400 });
   }
 
+  const backendBaseUrl = process.env.DRUM_REMOVER_BACKEND_URL;
+  if (process.env.VERCEL && backendBaseUrl) {
+    const safeFilename = path.basename(filename);
+    const location = `${backendBaseUrl.replace(/\/$/, "")}/api/download?file=${encodeURIComponent(safeFilename)}`;
+    return NextResponse.redirect(location, 302);
+  }
+
   // Security check: prevent directory traversal
   const safeFilename = path.basename(filename);
   const filePath = path.join("/tmp", safeFilename);

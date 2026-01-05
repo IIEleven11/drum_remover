@@ -9,6 +9,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Job ID is required" }, { status: 400 });
   }
 
+  const backendBaseUrl = process.env.DRUM_REMOVER_BACKEND_URL;
+  if (process.env.VERCEL && backendBaseUrl) {
+    const backendUrl = `${backendBaseUrl.replace(/\/$/, "")}/api/status?jobId=${encodeURIComponent(jobId)}`;
+    const res = await fetch(backendUrl, { cache: "no-store" });
+    const text = await res.text();
+    return new NextResponse(text, {
+      status: res.status,
+      headers: { "Content-Type": res.headers.get("content-type") || "application/json" },
+    });
+  }
+
   const job = jobs.get(jobId);
 
   if (!job) {

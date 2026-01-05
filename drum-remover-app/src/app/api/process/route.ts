@@ -28,6 +28,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Video ID is required" }, { status: 400 });
     }
 
+    // Vercel serverless cannot run Demucs/FFmpeg/Python reliably.
+    // If a backend is configured, proxy the request there and return its jobId.
+    const backendBaseUrl = process.env.DRUM_REMOVER_BACKEND_URL;
+    if (process.env.VERCEL && backendBaseUrl) {
+      const backendUrl = `${backendBaseUrl.replace(/\/$/, "")}/api/process`;
+      const res = await fetch(backendUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoId, title }),
+      });
+
+      const text = await res.text();
+      return new NextResponse(text, {
+        status: res.status,
+        headers: { "Content-Type": res.headers.get("content-type") || "application/json" },
+      });
+    }
+
     const jobId = uuidv4();
     jobs.set(jobId, { status: "pending", title });
 
@@ -131,6 +149,12 @@ async function processAudio(jobId: string, videoId: string, title: string) {
   const finalOutputFile = path.join(audioDir, `${jobId}_no_drums.mp3`);
 
   try {
+    if (process.env.VERCEL) {
+      throw new Error(
+        "Demucs is not available on Vercel serverless. Configure DRUM_REMOVER_BACKEND_URL to a Docker/VPS backend, or switch to a non-serverless host for processing."
+      );
+    }
+
     // Ensure directories exist
     if (!fs.existsSync(audioDir)) {
       fs.mkdirSync(audioDir, { recursive: true });
