@@ -19,22 +19,18 @@ WORKDIR /app
 
 # 4. Install Node.js Dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # 5. Copy the rest of your code
 COPY . .
 
-# Ensure the local yt-dlp binary is executable
-RUN chmod +x yt_dlp/yt-dlp
-
 # 6. Build the Next.js application
 RUN npm run build
 
-# 7. Expose the port (Hugging Face Spaces requires port 7860)
-EXPOSE 7860
+# 7. Expose the port (default 3000)
+EXPOSE 3000
 
-# 8. Start the server on port 7860
-CMD ["npm", "start", "--", "-p", "7860"]
-
-# Modify the demucs command for faster execution
-RUN sed -i 's|demucs -j 0 --segment 4 --two-stems drums|demucs --two-stems drums -o "${demucsOutputDir}" "${inputFile}"|g' your_script_file.js
+# 8. Run Next.js standalone server
+ENV NODE_ENV=production
+ENV PORT=3000
+CMD ["node", ".next/standalone/server.js"]
