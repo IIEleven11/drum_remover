@@ -136,6 +136,40 @@ async function downloadWithRapidApi(videoId: string, outputPath: string): Promis
   }
 }
 
+function peekFileHeader(filePath: string, maxBytes: number = 512): string {
+  try {
+    const fd = fs.openSync(filePath, "r");
+    try {
+      const buf = Buffer.alloc(maxBytes);
+      const n = fs.readSync(fd, buf, 0, maxBytes, 0);
+      return buf.subarray(0, n).toString("utf8");
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return "";
+  }
+}
+
+async function normalizeForDemucs(inputPath: string, outputWavPath: string): Promise<string> {
+  // Demucs uses torchaudio/ffmpeg to decode. Some RapidAPI URLs return non-audio
+  // or containers that decode unreliably; normalizing via ffmpeg makes this robust.
+  try {
+    await execAsync(
+      `ffmpeg -y -hide_banner -loglevel error -i "${inputPath}" -vn -ac 2 -ar 44100 "${outputWavPath}"`,
+      { timeout: 180000 }
+    );
+    if (fs.existsSync(outputWavPath)) return outputWavPath;
+  } catch (e: any) {
+    const stderr = typeof e?.stderr === "string" ? e.stderr : String(e);
+    throw new Error(
+      `Failed to normalize downloaded media for Demucs (ffmpeg). This usually means the downloaded file is not valid audio.\n\nffmpeg error:\n${stderr}`
+    );
+  }
+
+  throw new Error("Failed to normalize downloaded media for Demucs");
+}
+
 async function processAudio(jobId: string, videoId: string, title: string) {
   const job = jobs.get(jobId);
   if (!job) return;
@@ -146,6 +180,7 @@ async function processAudio(jobId: string, videoId: string, title: string) {
   const demucsOutputDir = path.join(audioDir, "separated");
   const safeTitle = title.replace(/[^a-zA-Z0-9]/g, "_").substring(0, 50);
   const inputFile = path.join(audioDir, `${jobId}_input.mp3`);
+  const normalizedInputFile = path.join(audioDir, `${jobId}_input.wav`);
   const finalOutputFile = path.join(audioDir, `${jobId}_no_drums.mp3`);
 
   try {
@@ -210,7 +245,19 @@ async function processAudio(jobId: string, videoId: string, title: string) {
       throw new Error("Failed to download audio file");
     }
 
+    // Quick sanity check: sometimes APIs return HTML/JSON instead of media.
+    const header = peekFileHeader(inputFile);
+    if (header.includes("<html") || header.trimStart().startsWith("{") || header.toLowerCase().includes("rate limit")) {
+      throw new Error(
+        "Download did not return media data (got HTML/JSON). Try again, or verify your RapidAPI plan/limits."
+      );
+    }
+
     console.log(`Audio downloaded to: ${inputFile}`);
+
+    // Normalize to WAV for Demucs to avoid torchaudio decode edge cases
+    const demucsInput = await normalizeForDemucs(inputFile, normalizedInputFile);
+    console.log(`Normalized audio for Demucs: ${demucsInput}`);
 
     // Step 2: Process with local Demucs
     job.status = "processing";
@@ -225,13 +272,13 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     let demucsCommand;
     
     if (fs.existsSync(path.join(venvPath, "bin", "activate"))) {
-       demucsCommand = `source ${venvPath}/bin/activate && python -m demucs --two-stems drums -o "${demucsOutputDir}" "${inputFile}"`;
+       demucsCommand = `source ${venvPath}/bin/activate && python -m demucs -j 0 --segment 4 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`;
     } else {
        // Assume system install (e.g. Docker)
        // Use -j 0 to disable multiprocessing (saves memory)
        // Use --segment 4 to reduce memory usage (default is 10)
        // Use OMP_NUM_THREADS=1 to further restrict parallelism
-       demucsCommand = `export OMP_NUM_THREADS=1 && demucs -j 0 --segment 4 --two-stems drums -o "${demucsOutputDir}" "${inputFile}"`;
+       demucsCommand = `export OMP_NUM_THREADS=1 && demucs -j 0 --segment 4 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`;
     }
 
     const { stdout: demucsOut, stderr: demucsErr } = await execAsync(demucsCommand, {
@@ -288,6 +335,9 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     // Clean up intermediate files
     try {
       fs.unlinkSync(inputFile);
+      if (fs.existsSync(normalizedInputFile)) {
+        fs.unlinkSync(normalizedInputFile);
+      }
       // Clean up demucs output directory for this job
       const jobDemucsDir = path.join(demucsOutputDir, "htdemucs", inputBasename);
       if (fs.existsSync(jobDemucsDir)) {
