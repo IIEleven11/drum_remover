@@ -1,31 +1,29 @@
 ---
 title: Drum Remover
 emoji: 🥁
-colorFrom: blue
-colorTo: red
+colorFrom: purple
+colorTo: blue
 sdk: docker
-app_port: 7860
+pinned: false
 ---
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Drum Remover
 
-## Getting Started
+A web application that removes drums from any song using AI (Demucs). Simply paste a YouTube link and get a drumless version of the track.
 
-First, run the development server:
+## How it works
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. Paste a YouTube video URL
+2. The app downloads the audio using yt-dlp
+3. Demucs AI separates the drums from the rest of the audio
+4. Download your drumless track!
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tech Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Frontend:** Next.js, React, Tailwind CSS
+- **AI Model:** Demucs (Hybrid Transformer)
+- **Audio Download:** yt-dlp
+- **Runtime:** Docker
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
