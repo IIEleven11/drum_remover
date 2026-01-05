@@ -401,7 +401,7 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     const header = peekFileHeader(inputFile);
     if (header.includes("<html") || header.trimStart().startsWith("{") || header.toLowerCase().includes("rate limit")) {
       throw new Error(
-        "Download did not return media data (got HTML/JSON). Try again, or verify your RapidAPI plan/limits."
+        `Download did not return media data (got HTML/JSON). Header snippet: ${header.slice(0, 100)}. Try again, or verify your RapidAPI plan/limits.`
       );
     }
 
