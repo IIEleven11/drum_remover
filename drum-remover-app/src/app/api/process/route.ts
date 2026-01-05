@@ -476,6 +476,13 @@ async function processAudio(jobId: string, videoId: string, title: string) {
 
     console.log(`Audio downloaded to: ${inputFile}`);
 
+    // SKIP DEMUCS: Return original MP3 directly
+    fs.copyFileSync(inputFile, finalOutputFile);
+    try { fs.unlinkSync(inputFile); } catch {}
+    job.status = "completed";
+    jobs.set(jobId, job);
+    return;
+
     // Normalize to WAV for Demucs to avoid torchaudio decode edge cases
     const demucsInput = await normalizeForDemucs(inputFile, normalizedInputFile);
     console.log(`Normalized audio for Demucs: ${demucsInput}`);
@@ -499,7 +506,7 @@ async function processAudio(jobId: string, videoId: string, title: string) {
        // Use -j 0 to disable multiprocessing (saves memory)
        // Use --segment 4 to reduce memory usage (default is 10)
        // Use OMP_NUM_THREADS=1 to further restrict parallelism
-       demucsCommand = `export OMP_NUM_THREADS=1 && demucs -j 0 --segment 4 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`;
+       demucsCommand = `export OMP_NUM_THREADS=2 && demucs --segment 10 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`;
     }
 
     const { stdout: demucsOut, stderr: demucsErr } = await execAsync(demucsCommand, {
