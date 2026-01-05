@@ -65,13 +65,22 @@ export async function POST(request: NextRequest) {
 async function downloadWithRapidApi(videoId: string, outputPath: string): Promise<boolean> {
   const apiKey = process.env.RAPIDAPI_KEY;
   const apiHost = process.env.RAPIDAPI_HOST || "youtube-search-and-download.p.rapidapi.com";
+  const hl = process.env.RAPIDAPI_HL;
+  const gl = process.env.RAPIDAPI_GL;
 
   if (!apiKey) return false;
 
   try {
     console.log("Attempting download with RapidAPI...");
 
-    const url = `https://${apiHost}/video/download?id=${encodeURIComponent(videoId)}`;
+    const isYoutube138 = apiHost.includes("youtube138.p.rapidapi.com");
+    const defaultPath = isYoutube138 ? "/video/details/" : "/video/download";
+    const apiPath = process.env.RAPIDAPI_DOWNLOAD_PATH || defaultPath;
+    const urlObj = new URL(`https://${apiHost}${apiPath}`);
+    urlObj.searchParams.set("id", videoId);
+    if (hl) urlObj.searchParams.set("hl", hl);
+    if (gl) urlObj.searchParams.set("gl", gl);
+    const url = urlObj.toString();
     const response = await fetch(url, {
       headers: {
         "x-rapidapi-host": apiHost,
@@ -111,6 +120,8 @@ async function downloadWithRapidApi(videoId: string, outputPath: string): Promis
     if (Array.isArray(data?.adaptiveFormats)) collectFromList(data.adaptiveFormats);
     if (Array.isArray(data?.streams)) collectFromList(data.streams);
     if (Array.isArray(data?.audioStreams)) collectFromList(data.audioStreams);
+    if (Array.isArray(data?.streamingData?.formats)) collectFromList(data.streamingData.formats);
+    if (Array.isArray(data?.streamingData?.adaptiveFormats)) collectFromList(data.streamingData.adaptiveFormats);
 
     // Heuristic: pick first URL that looks like audio; else first URL.
     const chosen =
@@ -122,9 +133,25 @@ async function downloadWithRapidApi(videoId: string, outputPath: string): Promis
       return false;
     }
 
-    const mediaRes = await fetch(chosen);
+    const chosenUrl = new URL(chosen);
+    const mediaHeaders: Record<string, string> = {};
+    // Some RapidAPI providers return a RapidAPI-hosted URL that still requires headers.
+    if (chosenUrl.host === apiHost) {
+      mediaHeaders["x-rapidapi-host"] = apiHost;
+      mediaHeaders["x-rapidapi-key"] = apiKey;
+    }
+
+    const mediaRes = await fetch(chosen, { headers: mediaHeaders });
     if (!mediaRes.ok || !mediaRes.body) {
       console.log(`Failed to fetch media URL: ${mediaRes.status}`);
+      return false;
+    }
+
+    const ctype = mediaRes.headers.get("content-type") || "";
+    if (ctype.includes("application/json") || ctype.includes("text/html") || ctype.includes("text/plain")) {
+      const body = await mediaRes.text().catch(() => "");
+      console.log(`Media URL returned non-media content-type: ${ctype}`);
+      console.log(body.slice(0, 300));
       return false;
     }
 
@@ -143,6 +170,8 @@ type RapidApiAttempt =
 async function downloadWithRapidApiDetailed(videoId: string, outputPath: string): Promise<RapidApiAttempt> {
   const apiKey = process.env.RAPIDAPI_KEY;
   const apiHost = process.env.RAPIDAPI_HOST || "youtube-search-and-download.p.rapidapi.com";
+  const hl = process.env.RAPIDAPI_HL;
+  const gl = process.env.RAPIDAPI_GL;
 
   if (!apiKey) {
     return {
@@ -155,7 +184,14 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
   try {
     console.log("Attempting download with RapidAPI...");
 
-    const url = `https://${apiHost}/video/download?id=${encodeURIComponent(videoId)}`;
+    const isYoutube138 = apiHost.includes("youtube138.p.rapidapi.com");
+    const defaultPath = isYoutube138 ? "/video/details/" : "/video/download";
+    const apiPath = process.env.RAPIDAPI_DOWNLOAD_PATH || defaultPath;
+    const urlObj = new URL(`https://${apiHost}${apiPath}`);
+    urlObj.searchParams.set("id", videoId);
+    if (hl) urlObj.searchParams.set("hl", hl);
+    if (gl) urlObj.searchParams.set("gl", gl);
+    const url = urlObj.toString();
     const response = await fetch(url, {
       headers: {
         "x-rapidapi-host": apiHost,
@@ -194,6 +230,8 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
     if (Array.isArray(data?.adaptiveFormats)) collectFromList(data.adaptiveFormats);
     if (Array.isArray(data?.streams)) collectFromList(data.streams);
     if (Array.isArray(data?.audioStreams)) collectFromList(data.audioStreams);
+    if (Array.isArray(data?.streamingData?.formats)) collectFromList(data.streamingData.formats);
+    if (Array.isArray(data?.streamingData?.adaptiveFormats)) collectFromList(data.streamingData.adaptiveFormats);
 
     const chosen =
       candidateUrls.find((u) => /audio|mime=audio|\bm4a\b|\bmp3\b|\bwebm\b/i.test(u)) || candidateUrls[0];
@@ -206,9 +244,26 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
       };
     }
 
-    const mediaRes = await fetch(chosen);
+    const chosenUrl = new URL(chosen);
+    const mediaHeaders: Record<string, string> = {};
+    // Some RapidAPI providers return a RapidAPI-hosted URL that still requires headers.
+    if (chosenUrl.host === apiHost) {
+      mediaHeaders["x-rapidapi-host"] = apiHost;
+      mediaHeaders["x-rapidapi-key"] = apiKey;
+    }
+
+    const mediaRes = await fetch(chosen, { headers: mediaHeaders });
     if (!mediaRes.ok || !mediaRes.body) {
       return { ok: false, error: `Failed to fetch media URL: ${mediaRes.status}` };
+    }
+
+    const ctype = mediaRes.headers.get("content-type") || "";
+    if (ctype.includes("application/json") || ctype.includes("text/html") || ctype.includes("text/plain")) {
+      const body = await mediaRes.text().catch(() => "");
+      return {
+        ok: false,
+        error: `Media URL returned non-media content-type (${ctype}). Body: ${body.slice(0, 300)}`,
+      };
     }
 
     await pipeline(Readable.fromWeb(mediaRes.body as any), fs.createWriteStream(outputPath));
