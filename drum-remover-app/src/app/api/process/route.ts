@@ -354,13 +354,20 @@ async function processAudio(jobId: string, videoId: string, title: string) {
 
     // Prefer RapidAPI (avoids bot-check issues on datacenter IPs)
     // Set RAPIDAPI_KEY in env vars. Do NOT hardcode it.
-    const rapid = await downloadWithRapidApiDetailed(videoId, inputFile);
-    let downloaded = rapid.ok;
+    let downloaded = false;
+    let rapidError = "";
+
+    // If RAPIDAPI_KEY is set, try it first.
+    if (process.env.RAPIDAPI_KEY) {
+      const rapid = await downloadWithRapidApiDetailed(videoId, inputFile);
+      downloaded = rapid.ok;
+      if (!rapid.ok) rapidError = rapid.error;
+    }
 
     // Vercel serverless does NOT include python3; yt-dlp cannot run there.
     if (process.env.VERCEL && !downloaded) {
       throw new Error(
-        "Download failed. On Vercel, yt-dlp cannot run because python3 is unavailable. Set RAPIDAPI_KEY (and optionally RAPIDAPI_HOST) in Vercel Environment Variables so the server can download audio via RapidAPI."
+        `Download failed. On Vercel, yt-dlp cannot run because python3 is unavailable. Set RAPIDAPI_KEY (and optionally RAPIDAPI_HOST) in Vercel Environment Variables so the server can download audio via RapidAPI.${rapidError ? `\n\nRapidAPI error: ${rapidError}` : ""}`
       );
     }
 
@@ -396,9 +403,32 @@ async function processAudio(jobId: string, videoId: string, title: string) {
       downloaded = fs.existsSync(inputFile);
     }
 
+    // NEW: Self-hosted API fallback (e.g. Cobalt, or a custom yt-dlp wrapper on another server)
+    // If configured, try this before giving up.
+    const selfHostedApi = process.env.SELF_HOSTED_YTDLP_URL; // e.g. https://my-downloader.com/api/download
+    if (!downloaded && selfHostedApi) {
+       console.log(`Attempting download via self-hosted API: ${selfHostedApi}`);
+       try {
+         const res = await fetch(selfHostedApi, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: youtubeUrl })
+         });
+         if (res.ok) {
+            // Assume the API returns the file stream directly
+            await pipeline(Readable.fromWeb(res.body as any), fs.createWriteStream(inputFile));
+            downloaded = fs.existsSync(inputFile);
+         } else {
+            console.log(`Self-hosted API returned ${res.status}`);
+         }
+       } catch (e) {
+         console.log("Self-hosted API failed:", e);
+       }
+    }
+
     if (!downloaded && !allowYtdlpFallback) {
       throw new Error(
-        `RapidAPI download failed and yt-dlp fallback is disabled. ${rapid.ok ? "" : `\n\nRapidAPI error: ${rapid.error}`}`.trim()
+        `RapidAPI download failed and yt-dlp fallback is disabled. ${rapidError ? `\n\nRapidAPI error: ${rapidError}` : ""}`.trim()
       );
     }
 
