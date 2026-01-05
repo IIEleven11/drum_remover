@@ -136,6 +136,92 @@ async function downloadWithRapidApi(videoId: string, outputPath: string): Promis
   }
 }
 
+type RapidApiAttempt =
+  | { ok: true }
+  | { ok: false; error: string };
+
+async function downloadWithRapidApiDetailed(videoId: string, outputPath: string): Promise<RapidApiAttempt> {
+  const apiKey = process.env.RAPIDAPI_KEY;
+  const apiHost = process.env.RAPIDAPI_HOST || "youtube-search-and-download.p.rapidapi.com";
+
+  if (!apiKey) {
+    return {
+      ok: false,
+      error:
+        "RAPIDAPI_KEY is not set on the backend. Set RAPIDAPI_KEY (and optionally RAPIDAPI_HOST) in the VPS container environment.",
+    };
+  }
+
+  try {
+    console.log("Attempting download with RapidAPI...");
+
+    const url = `https://${apiHost}/video/download?id=${encodeURIComponent(videoId)}`;
+    const response = await fetch(url, {
+      headers: {
+        "x-rapidapi-host": apiHost,
+        "x-rapidapi-key": apiKey,
+        "accept": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      return {
+        ok: false,
+        error: `RapidAPI download endpoint returned ${response.status}. ${body ? `Body: ${body.slice(0, 300)}` : ""}`.trim(),
+      };
+    }
+
+    const data: any = await response.json();
+
+    const candidateUrls: string[] = [];
+    const pushUrl = (v: unknown) => {
+      if (typeof v === "string" && v.startsWith("http")) candidateUrls.push(v);
+    };
+    pushUrl(data?.link);
+    pushUrl(data?.url);
+    pushUrl(data?.downloadUrl);
+    pushUrl(data?.download_url);
+
+    const collectFromList = (list: any[]) => {
+      for (const item of list) {
+        pushUrl(item?.url);
+        pushUrl(item?.link);
+        pushUrl(item?.downloadUrl);
+      }
+    };
+    if (Array.isArray(data?.formats)) collectFromList(data.formats);
+    if (Array.isArray(data?.adaptiveFormats)) collectFromList(data.adaptiveFormats);
+    if (Array.isArray(data?.streams)) collectFromList(data.streams);
+    if (Array.isArray(data?.audioStreams)) collectFromList(data.audioStreams);
+
+    const chosen =
+      candidateUrls.find((u) => /audio|mime=audio|\bm4a\b|\bmp3\b|\bwebm\b/i.test(u)) || candidateUrls[0];
+
+    if (!chosen) {
+      return {
+        ok: false,
+        error:
+          "RapidAPI response did not contain a usable download URL (no link/url/formats/audioStreams fields matched).",
+      };
+    }
+
+    const mediaRes = await fetch(chosen);
+    if (!mediaRes.ok || !mediaRes.body) {
+      return { ok: false, error: `Failed to fetch media URL: ${mediaRes.status}` };
+    }
+
+    await pipeline(Readable.fromWeb(mediaRes.body as any), fs.createWriteStream(outputPath));
+    if (!fs.existsSync(outputPath)) {
+      return { ok: false, error: "Media download completed but file was not created" };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 function peekFileHeader(filePath: string, maxBytes: number = 512): string {
   try {
     const fd = fs.openSync(filePath, "r");
@@ -202,9 +288,10 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
     console.log(`Downloading audio from: ${youtubeUrl}`);
 
-    // Prefer RapidAPI on serverless (avoids bundling yt-dlp/deno and reduces bot-check issues)
-    // Set RAPIDAPI_KEY in Vercel env vars. Do NOT hardcode it.
-    let downloaded = await downloadWithRapidApi(videoId, inputFile);
+    // Prefer RapidAPI (avoids bot-check issues on datacenter IPs)
+    // Set RAPIDAPI_KEY in env vars. Do NOT hardcode it.
+    const rapid = await downloadWithRapidApiDetailed(videoId, inputFile);
+    let downloaded = rapid.ok;
 
     // Vercel serverless does NOT include python3; yt-dlp cannot run there.
     if (process.env.VERCEL && !downloaded) {
@@ -213,8 +300,12 @@ async function processAudio(jobId: string, videoId: string, title: string) {
       );
     }
 
-    // Fallback: yt-dlp (works in Docker/local)
-    if (!downloaded) {
+    // On the VPS backend, do not silently fall back to yt-dlp unless explicitly enabled.
+    // This avoids surprise bot-check failures when the goal is RapidAPI-only.
+    const allowYtdlpFallback = process.env.ALLOW_YTDLP_FALLBACK === "1";
+
+    // Fallback: yt-dlp (optional; set ALLOW_YTDLP_FALLBACK=1)
+    if (!downloaded && allowYtdlpFallback) {
       // Determine yt-dlp path:
       // Prefer system yt-dlp (installed via pip in Docker/VPS). The bundled file
       // under .next/standalone/yt_dlp may lose executable permissions.
@@ -230,6 +321,12 @@ async function processAudio(jobId: string, videoId: string, title: string) {
       console.log("yt-dlp stdout:", ytdlpOut);
       if (ytdlpErr) console.log("yt-dlp stderr:", ytdlpErr);
       downloaded = fs.existsSync(inputFile);
+    }
+
+    if (!downloaded && !allowYtdlpFallback) {
+      throw new Error(
+        `RapidAPI download failed and yt-dlp fallback is disabled. ${rapid.ok ? "" : `\n\nRapidAPI error: ${rapid.error}`}`.trim()
+      );
     }
 
     if (!downloaded || !fs.existsSync(inputFile)) {
