@@ -204,6 +204,10 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
     if (gl) urlObj.searchParams.set("gl", gl);
     if (cgeo) urlObj.searchParams.set("cgeo", cgeo);
     const url = urlObj.toString();
+    
+    // Log the constructed URL (masking sensitive parts if any, though query params here are usually safe)
+    console.log(`Requesting RapidAPI URL: ${url}`);
+
     const response = await fetch(url, {
       headers: {
         "x-rapidapi-host": apiHost,
