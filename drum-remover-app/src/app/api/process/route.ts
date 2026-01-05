@@ -216,24 +216,15 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     // Fallback: yt-dlp (works in Docker/local)
     if (!downloaded) {
       // Determine yt-dlp path:
-      // 1. Env var YTDLP_PATH
-      // 2. Local binary in yt_dlp folder (relative to cwd)
-      // 3. System command 'yt-dlp' (for Docker/Global install)
-      let ytdlpPath = process.env.YTDLP_PATH;
-      if (!ytdlpPath) {
-        const localBinary = path.join(process.cwd(), "yt_dlp", "yt-dlp");
-        if (fs.existsSync(localBinary)) {
-          ytdlpPath = localBinary;
-        } else {
-          ytdlpPath = "yt-dlp"; // Fallback to system command
-        }
-      }
+      // Prefer system yt-dlp (installed via pip in Docker/VPS). The bundled file
+      // under .next/standalone/yt_dlp may lose executable permissions.
+      const ytdlpPath = process.env.YTDLP_PATH || "yt-dlp";
 
       const ytdlpCommand = `${ytdlpPath} --remote-components ejs:npm -x --audio-format mp3 --audio-quality 0 -o "${inputFile}" "${youtubeUrl}"`;
 
       const { stdout: ytdlpOut, stderr: ytdlpErr } = await execAsync(ytdlpCommand, {
         timeout: 600000, // 10 min timeout
-        env: { ...process.env, PATH: `${homedir}/.local/bin:${homedir}/.deno/bin:${process.env.PATH}` }
+        env: { ...process.env, PATH: `${homedir}/.local/bin:${homedir}/.deno/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH}` }
       });
 
       console.log("yt-dlp stdout:", ytdlpOut);
