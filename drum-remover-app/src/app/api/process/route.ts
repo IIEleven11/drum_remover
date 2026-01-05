@@ -302,9 +302,18 @@ async function processAudio(jobId: string, videoId: string, title: string) {
 
     // On the VPS backend, do not silently fall back to yt-dlp unless explicitly enabled.
     // This avoids surprise bot-check failures when the goal is RapidAPI-only.
-    const allowYtdlpFallback = process.env.ALLOW_YTDLP_FALLBACK === "1";
+    //
+    // We require TWO signals:
+    // - ALLOW_YTDLP_FALLBACK=1 (feature flag)
+    // - YTDLP_PATH set (explicitly opting into *where* yt-dlp should come from)
+    //
+    // This prevents accidental fallback when old env vars linger.
+    const allowYtdlpFallback =
+      process.env.ALLOW_YTDLP_FALLBACK === "1" &&
+      typeof process.env.YTDLP_PATH === "string" &&
+      process.env.YTDLP_PATH.trim().length > 0;
 
-    // Fallback: yt-dlp (optional; set ALLOW_YTDLP_FALLBACK=1)
+    // Fallback: yt-dlp (optional; set ALLOW_YTDLP_FALLBACK=1 and YTDLP_PATH=yt-dlp)
     if (!downloaded && allowYtdlpFallback) {
       // Determine yt-dlp path:
       // Prefer system yt-dlp (installed via pip in Docker/VPS). The bundled file
