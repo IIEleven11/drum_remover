@@ -200,20 +200,27 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
     const maskedKey = apiKey.length > 8 ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}` : "***";
     console.log(`Attempting download with RapidAPI... Host: ${apiHost}, Key: ${maskedKey}`);
 
-    const isYoutube138 = apiHost.includes("yt-search-and-download-mp3.p.rapidapi.com");
-    // const isYtApi = apiHost.includes("yt-api.p.rapidapi.com");
-    
-    let defaultPath = "/video/download";
-    if (isYoutube138) defaultPath = "/video/details/";
-    // if (isYtApi) defaultPath = "/dl";
+    const isYtSearchAndDownload = apiHost.includes("yt-search-and-download-mp3.p.rapidapi.com");
+    let url: string;
 
-    const apiPath = process.env.RAPIDAPI_DOWNLOAD_PATH || defaultPath;
-    const urlObj = new URL(`https://${apiHost}${apiPath}`);
-    urlObj.searchParams.set("id", videoId);
-    if (hl) urlObj.searchParams.set("hl", hl);
-    if (gl) urlObj.searchParams.set("gl", gl);
-    if (cgeo) urlObj.searchParams.set("cgeo", cgeo);
-    const url = urlObj.toString();
+    if (isYtSearchAndDownload) {
+      const apiPath = "/mp3";
+      const urlObj = new URL(`https://${apiHost}${apiPath}`);
+      urlObj.searchParams.set("url", `https://www.youtube.com/watch?v=${videoId}`);
+      url = urlObj.toString();
+    } else {
+      let defaultPath = "/video/download";
+      // const isYtApi = apiHost.includes("yt-api.p.rapidapi.com");
+      // if (isYtApi) defaultPath = "/dl";
+
+      const apiPath = process.env.RAPIDAPI_DOWNLOAD_PATH || defaultPath;
+      const urlObj = new URL(`https://${apiHost}${apiPath}`);
+      urlObj.searchParams.set("id", videoId);
+      if (hl) urlObj.searchParams.set("hl", hl);
+      if (gl) urlObj.searchParams.set("gl", gl);
+      if (cgeo) urlObj.searchParams.set("cgeo", cgeo);
+      url = urlObj.toString();
+    }
     
     // Log the constructed URL (masking sensitive parts if any, though query params here are usually safe)
     console.log(`Requesting RapidAPI URL: ${url}`);
@@ -242,6 +249,7 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
     };
     pushUrl(data?.link);
     pushUrl(data?.url);
+    pushUrl(data?.download);
     pushUrl(data?.downloadUrl);
     pushUrl(data?.download_url);
 
