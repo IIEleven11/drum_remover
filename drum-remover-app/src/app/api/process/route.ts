@@ -261,7 +261,10 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
     }
 
     const chosenUrl = new URL(chosen);
-    const mediaHeaders: Record<string, string> = {};
+    const mediaHeaders: Record<string, string> = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Referer": "https://www.youtube.com/",
+    };
     // Some RapidAPI providers return a RapidAPI-hosted URL that still requires headers.
     if (chosenUrl.host === apiHost) {
       mediaHeaders["x-rapidapi-host"] = apiHost;
