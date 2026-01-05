@@ -476,16 +476,9 @@ async function processAudio(jobId: string, videoId: string, title: string) {
 
     console.log(`Audio downloaded to: ${inputFile}`);
 
-    // SKIP DEMUCS: Return original MP3 directly
-    fs.copyFileSync(inputFile, finalOutputFile);
-    try { fs.unlinkSync(inputFile); } catch {}
-    job.status = "completed";
-    jobs.set(jobId, job);
-    return;
-
-    // Normalize to WAV for Demucs to avoid torchaudio decode edge cases
-    const demucsInput = await normalizeForDemucs(inputFile, normalizedInputFile);
-    console.log(`Normalized audio for Demucs: ${demucsInput}`);
+    // Use MP3 directly - Demucs can handle it and it's faster than converting to WAV
+    const demucsInput = inputFile;
+    console.log(`Using audio for Demucs: ${demucsInput}`);
 
     // Step 2: Process with local Demucs
     job.status = "processing";
@@ -500,13 +493,13 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     let demucsCommand;
     
     if (fs.existsSync(path.join(venvPath, "bin", "activate"))) {
-       demucsCommand = `source ${venvPath}/bin/activate && python -m demucs -j 0 --segment 4 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`;
+       demucsCommand = `source ${venvPath}/bin/activate && python -m demucs --mp3 -j 0 --segment 4 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`;
     } else {
        // Assume system install (e.g. Docker)
-       // Use -j 0 to disable multiprocessing (saves memory)
-       // Use --segment 4 to reduce memory usage (default is 10)
-       // Use OMP_NUM_THREADS=1 to further restrict parallelism
-       demucsCommand = `export OMP_NUM_THREADS=2 && demucs --segment 10 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`;
+       // Use --mp3 to output MP3 directly (faster, smaller files)
+       // Use --segment 10 for memory/speed tradeoff
+       // Use OMP_NUM_THREADS=2 to restrict parallelism
+       demucsCommand = `export OMP_NUM_THREADS=2 && demucs --mp3 --segment 10 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`;
     }
 
     const { stdout: demucsOut, stderr: demucsErr } = await execAsync(demucsCommand, {
@@ -518,12 +511,13 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     console.log("Demucs stdout:", demucsOut);
     if (demucsErr) console.log("Demucs stderr:", demucsErr);
 
-    // Demucs outputs to: separated/htdemucs/{filename}/no_drums.wav
+    // Demucs outputs to: separated/htdemucs/{filename}/no_drums.mp3 (with --mp3 flag)
     // Find the output file
     const inputBasename = path.basename(inputFile, ".mp3");
     const possiblePaths = [
-      path.join(demucsOutputDir, "htdemucs", inputBasename, "no_drums.wav"),
       path.join(demucsOutputDir, "htdemucs", inputBasename, "no_drums.mp3"),
+      path.join(demucsOutputDir, "htdemucs", inputBasename, "no_drums.wav"),
+      path.join(demucsOutputDir, "htdemucs_6s", inputBasename, "no_drums.mp3"),
       path.join(demucsOutputDir, "htdemucs_6s", inputBasename, "no_drums.wav"),
     ];
 
