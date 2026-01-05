@@ -176,6 +176,7 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
   const apiHost = process.env.RAPIDAPI_HOST || "youtube-search-and-download.p.rapidapi.com";
   const hl = process.env.RAPIDAPI_HL;
   const gl = process.env.RAPIDAPI_GL;
+  const cgeo = process.env.RAPIDAPI_CGEO;
 
   if (!apiKey) {
     return {
@@ -201,6 +202,7 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
     urlObj.searchParams.set("id", videoId);
     if (hl) urlObj.searchParams.set("hl", hl);
     if (gl) urlObj.searchParams.set("gl", gl);
+    if (cgeo) urlObj.searchParams.set("cgeo", cgeo);
     const url = urlObj.toString();
     const response = await fetch(url, {
       headers: {
@@ -264,7 +266,7 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
 
     const mediaRes = await fetch(chosen, { headers: mediaHeaders });
     if (!mediaRes.ok || !mediaRes.body) {
-      return { ok: false, error: `Failed to fetch media URL: ${mediaRes.status}` };
+      return { ok: false, error: `Failed to fetch media URL (${chosen}): ${mediaRes.status}` };
     }
 
     const ctype = mediaRes.headers.get("content-type") || "";
@@ -578,4 +580,6 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     jobs.set(jobId, job);
   }
 }
+
+
 
