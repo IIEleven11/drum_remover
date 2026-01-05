@@ -499,7 +499,7 @@ async function processAudio(jobId: string, videoId: string, title: string) {
        // Use --mp3 to output MP3 directly (faster, smaller files)
        // Use --segment 10 for memory/speed tradeoff
        // Use OMP_NUM_THREADS=2 to restrict parallelism
-       demucsCommand = `export OMP_NUM_THREADS=2 && demucs --mp3 --segment 10 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`;
+       demucsCommand = `export OMP_NUM_THREADS=2 && demucs --mp3 --segment 7 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`;
     }
 
     const { stdout: demucsOut, stderr: demucsErr } = await execAsync(demucsCommand, {
