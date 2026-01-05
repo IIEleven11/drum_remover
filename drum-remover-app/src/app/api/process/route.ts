@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
 async function downloadWithRapidApi(videoId: string, outputPath: string): Promise<boolean> {
   const apiKey = process.env.RAPIDAPI_KEY;
-  const apiHost = process.env.RAPIDAPI_HOST || "youtube-search-and-download.p.rapidapi.com";
+  const apiHost = process.env.RAPIDAPI_HOST || "yt-search-and-download-mp3.p.rapidapi.com";
   const hl = process.env.RAPIDAPI_HL;
   const gl = process.env.RAPIDAPI_GL;
 
@@ -77,14 +77,23 @@ async function downloadWithRapidApi(videoId: string, outputPath: string): Promis
   try {
     console.log("Attempting download with RapidAPI...");
 
-    const isYoutube138 = apiHost.includes("yt-api.p.rapidapi.com");
-    const defaultPath = isYoutube138 ? "/video/details/" : "/video/download";
-    const apiPath = process.env.RAPIDAPI_DOWNLOAD_PATH || defaultPath;
-    const urlObj = new URL(`https://${apiHost}${apiPath}`);
-    urlObj.searchParams.set("id", videoId);
-    if (hl) urlObj.searchParams.set("hl", hl);
-    if (gl) urlObj.searchParams.set("gl", gl);
-    const url = urlObj.toString();
+    const isYtSearchAndDownload = apiHost.includes("yt-search-and-download-mp3.p.rapidapi.com");
+    let url: string;
+
+    if (isYtSearchAndDownload) {
+      const apiPath = "/mp3";
+      const urlObj = new URL(`https://${apiHost}${apiPath}`);
+      urlObj.searchParams.set("url", `https://www.youtube.com/watch?v=${videoId}`);
+      url = urlObj.toString();
+    } else {
+      const defaultPath = "/video/download";
+      const apiPath = process.env.RAPIDAPI_DOWNLOAD_PATH || defaultPath;
+      const urlObj = new URL(`https://${apiHost}${apiPath}`);
+      urlObj.searchParams.set("id", videoId);
+      if (hl) urlObj.searchParams.set("hl", hl);
+      if (gl) urlObj.searchParams.set("gl", gl);
+      url = urlObj.toString();
+    }
     const response = await fetch(url, {
       headers: {
         "x-rapidapi-host": apiHost,
@@ -109,6 +118,7 @@ async function downloadWithRapidApi(videoId: string, outputPath: string): Promis
 
     pushUrl(data?.link);
     pushUrl(data?.url);
+    pushUrl(data?.download);
     pushUrl(data?.downloadUrl);
     pushUrl(data?.download_url);
 
@@ -173,7 +183,7 @@ type RapidApiAttempt =
 
 async function downloadWithRapidApiDetailed(videoId: string, outputPath: string): Promise<RapidApiAttempt> {
   const apiKey = process.env.RAPIDAPI_KEY;
-  const apiHost = process.env.RAPIDAPI_HOST || "youtube-search-and-download.p.rapidapi.com";
+  const apiHost = process.env.RAPIDAPI_HOST || "yt-search-and-download-mp3.p.rapidapi.com";
   const hl = process.env.RAPIDAPI_HL;
   const gl = process.env.RAPIDAPI_GL;
   const cgeo = process.env.RAPIDAPI_CGEO;
@@ -190,12 +200,12 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
     const maskedKey = apiKey.length > 8 ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}` : "***";
     console.log(`Attempting download with RapidAPI... Host: ${apiHost}, Key: ${maskedKey}`);
 
-    const isYoutube138 = apiHost.includes("youtube138.p.rapidapi.com");
-    const isYtApi = apiHost.includes("yt-api.p.rapidapi.com");
+    const isYoutube138 = apiHost.includes("yt-search-and-download-mp3.p.rapidapi.com");
+    // const isYtApi = apiHost.includes("yt-api.p.rapidapi.com");
     
     let defaultPath = "/video/download";
     if (isYoutube138) defaultPath = "/video/details/";
-    if (isYtApi) defaultPath = "/dl";
+    // if (isYtApi) defaultPath = "/dl";
 
     const apiPath = process.env.RAPIDAPI_DOWNLOAD_PATH || defaultPath;
     const urlObj = new URL(`https://${apiHost}${apiPath}`);

@@ -1,0 +1,13 @@
+{
+  "name": "youtube-dl-proxy",
+  "version": "1.0.0",
+  "description": "Simple proxy to download YouTube videos via yt-dlp from a residential IP",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}
