@@ -70,10 +70,14 @@ async function downloadWithRapidApi(videoId: string, outputPath: string): Promis
 
   if (!apiKey) return false;
 
+
+
+
+
   try {
     console.log("Attempting download with RapidAPI...");
 
-    const isYoutube138 = apiHost.includes("youtube138.p.rapidapi.com");
+    const isYoutube138 = apiHost.includes("yt-api.p.rapidapi.com");
     const defaultPath = isYoutube138 ? "/video/details/" : "/video/download";
     const apiPath = process.env.RAPIDAPI_DOWNLOAD_PATH || defaultPath;
     const urlObj = new URL(`https://${apiHost}${apiPath}`);
@@ -185,7 +189,12 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
     console.log("Attempting download with RapidAPI...");
 
     const isYoutube138 = apiHost.includes("youtube138.p.rapidapi.com");
-    const defaultPath = isYoutube138 ? "/video/details/" : "/video/download";
+    const isYtApi = apiHost.includes("yt-api.p.rapidapi.com");
+    
+    let defaultPath = "/video/download";
+    if (isYoutube138) defaultPath = "/video/details/";
+    if (isYtApi) defaultPath = "/dl";
+
     const apiPath = process.env.RAPIDAPI_DOWNLOAD_PATH || defaultPath;
     const urlObj = new URL(`https://${apiHost}${apiPath}`);
     urlObj.searchParams.set("id", videoId);
@@ -204,7 +213,7 @@ async function downloadWithRapidApiDetailed(videoId: string, outputPath: string)
       const body = await response.text().catch(() => "");
       return {
         ok: false,
-        error: `RapidAPI download endpoint returned ${response.status}. ${body ? `Body: ${body.slice(0, 300)}` : ""}`.trim(),
+        error: `RapidAPI download endpoint (${url}) returned ${response.status}. ${body ? `Body: ${body.slice(0, 300)}` : ""}`.trim(),
       };
     }
 
