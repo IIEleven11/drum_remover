@@ -215,7 +215,7 @@ export default function Home() {
             <div className="absolute top-0 left-0 w-full h-1 bg-accent/50 animate-pulse"></div>
             <div className="relative overflow-hidden bg-neutral-900 max-w-[252px]">
               <video
-                src="/public/me_and_father.webm"
+                src="/me_and_father.webm"
                 autoPlay
                 loop
                 muted
