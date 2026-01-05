@@ -147,7 +147,14 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     // Set RAPIDAPI_KEY in Vercel env vars. Do NOT hardcode it.
     let downloaded = await downloadWithRapidApi(videoId, inputFile);
 
-    // Fallback: yt-dlp (works in Docker/local, but typically not on Vercel)
+    // Vercel serverless does NOT include python3; yt-dlp cannot run there.
+    if (process.env.VERCEL && !downloaded) {
+      throw new Error(
+        "Download failed. On Vercel, yt-dlp cannot run because python3 is unavailable. Set RAPIDAPI_KEY (and optionally RAPIDAPI_HOST) in Vercel Environment Variables so the server can download audio via RapidAPI."
+      );
+    }
+
+    // Fallback: yt-dlp (works in Docker/local)
     if (!downloaded) {
       // Determine yt-dlp path:
       // 1. Env var YTDLP_PATH
