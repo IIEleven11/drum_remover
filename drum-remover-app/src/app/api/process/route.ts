@@ -497,16 +497,31 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     let shell: string;
     let shellArgs: string[];
     
+    // PERFORMANCE OPTIMIZATIONS:
+    // --model htdemucs: default model, good balance (can use 'hdemucs_mmi' for faster but slightly lower quality)
+    // --segment 5: smaller segments = less memory, slightly faster (default is 7.8)
+    // --two-stems drums: only separate drums vs rest (faster than 4-stem separation)
+    // --mp3: output MP3 directly (avoids extra conversion step)
+    // --mp3-bitrate 192: good quality at reasonable size
+    // --jobs 2: parallel processing of segments (increase if VPS has more RAM)
+    // OMP_NUM_THREADS: controls CPU parallelism per job
+    
+    // Configurable via environment variables for easy tuning without rebuild
+    const demucsModel = process.env.DEMUCS_MODEL || "htdemucs";
+    const demucsSegment = process.env.DEMUCS_SEGMENT || "5";
+    const demucsJobs = process.env.DEMUCS_JOBS || "2";
+    const ompThreads = process.env.OMP_NUM_THREADS || "4";
+    const mp3Bitrate = process.env.DEMUCS_MP3_BITRATE || "192";
+    
+    const demucsFlags = `--model ${demucsModel} --mp3 --mp3-bitrate ${mp3Bitrate} --segment ${demucsSegment} --two-stems drums --jobs ${demucsJobs}`;
+    
     if (fs.existsSync(path.join(venvPath, "bin", "activate"))) {
        shell = "/bin/bash";
-       shellArgs = ["-c", `source ${venvPath}/bin/activate && python -m demucs --mp3  --segment 7 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`];
+       shellArgs = ["-c", `source ${venvPath}/bin/activate && OMP_NUM_THREADS=${ompThreads} python -m demucs ${demucsFlags} -o "${demucsOutputDir}" "${demucsInput}"`];
     } else {
        // Assume system install (e.g. Docker)
-       // Use --mp3 to output MP3 directly (faster, smaller files)
-       // Use --segment 7 for memory/speed tradeoff
-       // Use OMP_NUM_THREADS=2 to restrict parallelism
        shell = "/bin/bash";
-       shellArgs = ["-c", `export OMP_NUM_THREADS=2 && demucs --mp3 --segment 7 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`];
+       shellArgs = ["-c", `export OMP_NUM_THREADS=${ompThreads} && demucs ${demucsFlags} -o "${demucsOutputDir}" "${demucsInput}"`];
     }
 
     // Use spawn to get real-time progress updates
@@ -572,27 +587,33 @@ async function processAudio(jobId: string, videoId: string, title: string) {
       });
     });
 
-    // Demucs outputs to: separated/htdemucs/{filename}/no_drums.mp3 (with --mp3 flag)
+    // Demucs outputs to: separated/{model}/{filename}/no_drums.mp3 (with --mp3 flag)
     // Find the output file
     const inputBasename = path.basename(inputFile, ".mp3");
+    // Note: demucsModel is already defined above
     const possiblePaths = [
+      path.join(demucsOutputDir, demucsModel, inputBasename, "no_drums.mp3"),
+      path.join(demucsOutputDir, demucsModel, inputBasename, "no_drums.wav"),
+      // Fallback to common model names in case env var differs from actual output
       path.join(demucsOutputDir, "htdemucs", inputBasename, "no_drums.mp3"),
       path.join(demucsOutputDir, "htdemucs", inputBasename, "no_drums.wav"),
       path.join(demucsOutputDir, "htdemucs_6s", inputBasename, "no_drums.mp3"),
       path.join(demucsOutputDir, "htdemucs_6s", inputBasename, "no_drums.wav"),
+      path.join(demucsOutputDir, "hdemucs_mmi", inputBasename, "no_drums.mp3"),
+      path.join(demucsOutputDir, "hdemucs_mmi", inputBasename, "no_drums.wav"),
     ];
 
-    let drumlessWavFile = "";
+    let drumlessFile = "";
     for (const p of possiblePaths) {
       if (fs.existsSync(p)) {
-        drumlessWavFile = p;
+        drumlessFile = p;
         break;
       }
     }
 
-    if (!drumlessWavFile) {
+    if (!drumlessFile) {
       // List what was actually created for debugging
-      const separatedDir = path.join(demucsOutputDir, "htdemucs", inputBasename);
+      const separatedDir = path.join(demucsOutputDir, demucsModel, inputBasename);
       if (fs.existsSync(separatedDir)) {
         const files = fs.readdirSync(separatedDir);
         console.log("Files in separated dir:", files);
@@ -600,19 +621,29 @@ async function processAudio(jobId: string, videoId: string, title: string) {
       throw new Error("Demucs processing completed but output file not found");
     }
 
-    console.log(`Drumless audio created at: ${drumlessWavFile}`);
+    console.log(`Drumless audio created at: ${drumlessFile}`);
 
-    // Convert WAV to MP3 for smaller file size (if ffmpeg available)
-    try {
-      await execAsync(`ffmpeg -i "${drumlessWavFile}" -codec:a libmp3lame -qscale:a 2 "${finalOutputFile}" -y`, {
-        timeout: 120000
-      });
-      console.log(`Converted to MP3: ${finalOutputFile}`);
-    } catch {
-      // If ffmpeg not available, just copy the WAV file
-      const wavOutput = finalOutputFile.replace(".mp3", ".wav");
-      fs.copyFileSync(drumlessWavFile, wavOutput);
-      console.log(`Copied WAV to: ${wavOutput}`);
+    // If Demucs already output MP3, just move/copy it to final location
+    // If it's WAV (shouldn't happen with --mp3 flag), convert to MP3
+    const isAlreadyMp3 = drumlessFile.endsWith(".mp3");
+    
+    if (isAlreadyMp3) {
+      // Just copy the file - no conversion needed (faster!)
+      fs.copyFileSync(drumlessFile, finalOutputFile);
+      console.log(`Copied MP3 to: ${finalOutputFile}`);
+    } else {
+      // Convert WAV to MP3 for smaller file size
+      try {
+        await execAsync(`ffmpeg -i "${drumlessFile}" -codec:a libmp3lame -qscale:a 2 "${finalOutputFile}" -y`, {
+          timeout: 120000
+        });
+        console.log(`Converted to MP3: ${finalOutputFile}`);
+      } catch {
+        // If ffmpeg not available, just copy the WAV file
+        const wavOutput = finalOutputFile.replace(".mp3", ".wav");
+        fs.copyFileSync(drumlessFile, wavOutput);
+        console.log(`Copied WAV to: ${wavOutput}`);
+      }
     }
 
     // Clean up intermediate files
@@ -622,7 +653,8 @@ async function processAudio(jobId: string, videoId: string, title: string) {
         fs.unlinkSync(normalizedInputFile);
       }
       // Clean up demucs output directory for this job
-      const jobDemucsDir = path.join(demucsOutputDir, "htdemucs", inputBasename);
+      // Note: demucsModel is already defined above
+      const jobDemucsDir = path.join(demucsOutputDir, demucsModel, inputBasename);
       if (fs.existsSync(jobDemucsDir)) {
         fs.rmSync(jobDemucsDir, { recursive: true });
       }
