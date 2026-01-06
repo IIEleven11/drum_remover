@@ -21,6 +21,12 @@ RUN pip3 install -U yt-dlp spleeter --no-cache-dir --break-system-packages
 # 3. Set up the App Directory
 WORKDIR /app
 
+# Optimize Spleeter/TensorFlow for low-memory environments
+ENV MODEL_PATH=/app/pretrained_models
+ENV OMP_NUM_THREADS=1
+ENV TF_NUM_INTRAOP_THREADS=1
+ENV TF_NUM_INTEROP_THREADS=1
+
 # 3.1 Pre-download Spleeter model (4stems) to avoid runtime download/extraction OOMs
 # We download and extract it to /app/pretrained_models/4stems where Spleeter expects it
 RUN mkdir -p /app/pretrained_models/4stems && \
