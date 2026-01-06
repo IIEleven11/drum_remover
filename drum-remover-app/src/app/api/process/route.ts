@@ -496,17 +496,53 @@ async function processAudio(jobId: string, videoId: string, title: string) {
          env: { ...process.env }
       });
 
+      // Simulate progress for the heavy separate step (it can take 30-60s)
+      const progressInterval = setInterval(() => {
+        const current = jobs.get(jobId);
+        if (current && current.status === "processing" && current.progress) {
+             // Only auto-increment if we are in the "Separating" phase (approx 40-80%)
+             if (current.progress >= 40 && current.progress < 85) {
+                 current.progress += 2;
+                 jobs.set(jobId, current);
+             }
+        }
+      }, 2000);
+
       spleeter.stdout.on("data", (data) => {
-          console.log(`Spleeter: ${data}`);
+          const output = data.toString();
+          console.log(`Spleeter: ${output}`);
+          
+          let updated = false;
+          if (output.includes("Loading audio")) {
+             job.progress = 10; 
+             updated = true;
+          } else if (output.includes("Audio data loaded")) {
+             job.progress = 20;
+             updated = true;
+          } else if (output.includes("Separating")) {
+             job.progress = 40; // Separation starts
+             updated = true;
+          } else if (output.includes("written")) {
+             // When files are written, jump to end of separation phase
+             job.progress = (job.progress || 85) + 3;
+             updated = true;
+          }
+          
+          if (updated) jobs.set(jobId, job);
       });
+      
       spleeter.stderr.on("data", (data) => console.log(`Spleeter stderr: ${data}`));
       
       spleeter.on("close", (code, signal) => {
+        clearInterval(progressInterval);
         if (code === 0) resolve();
         else reject(new Error(`Spleeter exited with code ${code} and signal ${signal}`));
       });
       
-      spleeter.on("error", (err) => reject(err));
+      spleeter.on("error", (err) => {
+        clearInterval(progressInterval);
+        reject(err);
+      });
     });
 
     // Spleeter outputs to: {outputDir}/{filename_without_ext}/{stem}.wav
@@ -523,6 +559,10 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     }
 
     console.log("Mixing stems to remove drums (vocals + bass + other)...");
+    
+    // Mixing phase
+    job.progress = 95;
+    jobs.set(jobId, job);
     
     // Combine 3 stems into one MP3
     await execAsync(
