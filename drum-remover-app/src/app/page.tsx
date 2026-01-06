@@ -152,10 +152,12 @@ export default function Home() {
         V 1.0
       </div>
       <div className="absolute bottom-8 left-8 corner-text hidden md:block">
-        AI POWERED AUDIO SEPARATION
+        <a href="https://github.com/IIEleven11" target="_blank" rel="noopener noreferrer" className="underline">
+          https://github.com/IIEleven11
+        </a>
       </div>
       <div className="absolute bottom-8 right-8 corner-text hidden md:block">
-        2026 EDITION
+        Engineer: Jake Mottola
       </div>
 
       {/* Side Decorations */}

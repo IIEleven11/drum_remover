@@ -503,7 +503,7 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     // --two-stems drums: only separate drums vs rest (faster than 4-stem separation)
     // --mp3: output MP3 directly (avoids extra conversion step)
     // --mp3-bitrate 192: good quality at reasonable size
-    // --jobs 2: parallel processing of segments (increase if VPS has more RAM)
+    // -j JOBS: parallel processing of segments (increase if VPS has more RAM)
     // OMP_NUM_THREADS: controls CPU parallelism per job
     
     // Configurable via environment variables for easy tuning without rebuild
@@ -513,7 +513,8 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     const ompThreads = process.env.OMP_NUM_THREADS || "4";
     const mp3Bitrate = process.env.DEMUCS_MP3_BITRATE || "192";
     
-    const demucsFlags = `--model ${demucsModel} --mp3 --mp3-bitrate ${mp3Bitrate} --segment ${demucsSegment} --two-stems drums --jobs ${demucsJobs}`;
+    // Note: Demucs uses -n for model name, --segment for segment size, -j for jobs
+    const demucsFlags = `-n ${demucsModel} --mp3 --mp3-bitrate ${mp3Bitrate} --segment ${demucsSegment} --two-stems drums -j ${demucsJobs}`;
     
     if (fs.existsSync(path.join(venvPath, "bin", "activate"))) {
        shell = "/bin/bash";
