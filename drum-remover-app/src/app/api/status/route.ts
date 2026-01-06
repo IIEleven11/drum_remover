@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
     error: job.error,
     downloadUrl: job.downloadUrl,
     title: job.title,
+    progress: job.progress,
   });
 }
 

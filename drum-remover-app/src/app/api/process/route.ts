@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import { promisify } from "util";
 import path from "path";
 import fs from "fs";
@@ -15,6 +15,7 @@ const jobs = new Map<string, {
   error?: string;
   downloadUrl?: string;
   title: string;
+  progress?: number; // 0-100 for processing progress
 }>();
 
 // Export jobs map for status route
@@ -356,7 +357,8 @@ async function processAudio(jobId: string, videoId: string, title: string) {
 
   const homedir = process.env.HOME || "/drum-remover-app";
   // Use /tmp for Vercel/Serverless environments
-  const audioDir = process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "public", "audio");
+  // For Docker standalone, use /app/public/audio (not process.cwd() which points to .next/standalone)
+  const audioDir = process.env.VERCEL ? "/tmp" : "/app/public/audio";
   const demucsOutputDir = path.join(audioDir, "separated");
   const safeTitle = title.replace(/[^a-zA-Z0-9]/g, "_").substring(0, 50);
   const inputFile = path.join(audioDir, `${jobId}_input.mp3`);
@@ -482,6 +484,7 @@ async function processAudio(jobId: string, videoId: string, title: string) {
 
     // Step 2: Process with local Demucs
     job.status = "processing";
+    job.progress = 0;
     jobs.set(jobId, job);
 
     console.log("Processing with Demucs (this may take a few minutes)...");
@@ -490,26 +493,84 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     // 1. Virtual Environment (local dev)
     // 2. System command (Docker/Global install)
     const venvPath = `${homedir}/.drum-remover-venv`;
-    let demucsCommand;
+    let demucsArgs: string[];
+    let shell: string;
+    let shellArgs: string[];
     
     if (fs.existsSync(path.join(venvPath, "bin", "activate"))) {
-       demucsCommand = `source ${venvPath}/bin/activate && python -m demucs --mp3 -j 0 --segment 4 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`;
+       shell = "/bin/bash";
+       shellArgs = ["-c", `source ${venvPath}/bin/activate && python -m demucs --mp3 -j 0 --segment 4 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`];
     } else {
        // Assume system install (e.g. Docker)
        // Use --mp3 to output MP3 directly (faster, smaller files)
-       // Use --segment 10 for memory/speed tradeoff
+       // Use --segment 7 for memory/speed tradeoff
        // Use OMP_NUM_THREADS=2 to restrict parallelism
-       demucsCommand = `export OMP_NUM_THREADS=2 && demucs --mp3 --segment 7 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`;
+       shell = "/bin/bash";
+       shellArgs = ["-c", `export OMP_NUM_THREADS=2 && demucs --mp3 --segment 7 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`];
     }
 
-    const { stdout: demucsOut, stderr: demucsErr } = await execAsync(demucsCommand, {
-      timeout: 1800000, // 30 min timeout for processing
-      shell: "/bin/bash",
-      env: { ...process.env }
-    });
+    // Use spawn to get real-time progress updates
+    await new Promise<void>((resolve, reject) => {
+      const demucsProcess = spawn(shell, shellArgs, {
+        env: { ...process.env },
+        stdio: ["ignore", "pipe", "pipe"]
+      });
 
-    console.log("Demucs stdout:", demucsOut);
-    if (demucsErr) console.log("Demucs stderr:", demucsErr);
+      let stdout = "";
+      let stderr = "";
+
+      demucsProcess.stdout.on("data", (data: Buffer) => {
+        const text = data.toString();
+        stdout += text;
+        console.log("Demucs:", text.trim());
+        
+        // Parse progress from demucs output (it shows percentage like "50%")
+        const progressMatch = text.match(/(\d+)%/);
+        if (progressMatch) {
+          const progress = parseInt(progressMatch[1], 10);
+          job.progress = progress;
+          jobs.set(jobId, job);
+        }
+      });
+
+      demucsProcess.stderr.on("data", (data: Buffer) => {
+        const text = data.toString();
+        stderr += text;
+        console.log("Demucs stderr:", text.trim());
+        
+        // Demucs often writes progress to stderr
+        const progressMatch = text.match(/(\d+)%/);
+        if (progressMatch) {
+          const progress = parseInt(progressMatch[1], 10);
+          job.progress = progress;
+          jobs.set(jobId, job);
+        }
+      });
+
+      const timeout = setTimeout(() => {
+        demucsProcess.kill();
+        reject(new Error("Demucs processing timed out after 30 minutes"));
+      }, 1800000); // 30 min timeout
+
+      demucsProcess.on("close", (code) => {
+        clearTimeout(timeout);
+        console.log("Demucs stdout:", stdout);
+        if (stderr) console.log("Demucs stderr:", stderr);
+        
+        if (code === 0) {
+          job.progress = 100;
+          jobs.set(jobId, job);
+          resolve();
+        } else {
+          reject(new Error(`Demucs exited with code ${code}. stderr: ${stderr.slice(-500)}`));
+        }
+      });
+
+      demucsProcess.on("error", (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+    });
 
     // Demucs outputs to: separated/htdemucs/{filename}/no_drums.mp3 (with --mp3 flag)
     // Find the output file

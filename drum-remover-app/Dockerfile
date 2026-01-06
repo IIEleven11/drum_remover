@@ -27,10 +27,16 @@ COPY . .
 # 6. Build the Next.js application
 RUN npm run build
 
-# 7. Expose the port (default 3000)
+# 7. Copy public folder to standalone (Next.js standalone doesn't include it automatically)
+RUN cp -r public .next/standalone/public || true
+
+# 8. Create audio directory with proper permissions
+RUN mkdir -p /app/public/audio && chmod 777 /app/public/audio
+
+# 9. Expose the port (default 3000)
 EXPOSE 3000
 
-# 8. Run Next.js standalone server
+# 10. Run Next.js standalone server
 ENV NODE_ENV=production
 ENV PORT=3000
 CMD ["node", ".next/standalone/server.js"]

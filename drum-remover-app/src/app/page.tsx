@@ -25,6 +25,7 @@ export default function Home() {
   const [downloadUrl, setDownloadUrl] = useState("");
   const [error, setError] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [progress, setProgress] = useState(0);
 
   const handleSearch = async () => {
     if (!songName.trim()) return;
@@ -74,13 +75,15 @@ export default function Home() {
       // Poll for status
       const jobId = data.jobId;
       setStep("processing");
-      setStatusMessage("PLEASE WAIT, SEPARATING AUDIO TRACKS. THIS MAY TAKE A MINUTE.");
+      setProgress(0);
+      setStatusMessage("SEPARATING AUDIO TRACKS...");
 
       const pollStatus = async () => {
         const statusRes = await fetch(`/api/status?jobId=${jobId}`);
         const statusData = await statusRes.json();
 
         if (statusData.status === "completed") {
+          setProgress(100);
           setStep("done");
           setStatusMessage("PROCESS COMPLETE");
           setDownloadUrl(statusData.downloadUrl);
@@ -98,8 +101,17 @@ export default function Home() {
         } else if (statusData.status === "failed") {
           throw new Error(statusData.error || "PROCESSING FAILED");
         } else {
+          // Update progress if available
+          if (typeof statusData.progress === "number") {
+            setProgress(statusData.progress);
+            if (statusData.status === "downloading") {
+              setStatusMessage("DOWNLOADING AUDIO...");
+            } else {
+              setStatusMessage(`SEPARATING AUDIO... ${statusData.progress}%`);
+            }
+          }
           // Still processing, poll again
-          setTimeout(pollStatus, 3000);
+          setTimeout(pollStatus, 2000);
         }
       };
 
@@ -117,6 +129,7 @@ export default function Home() {
     setStatusMessage("");
     setDownloadUrl("");
     setError("");
+    setProgress(0);
   };
 
   const restoreFromHistory = (item: HistoryItem) => {
@@ -193,6 +206,21 @@ export default function Home() {
               </div>
             )}
           </div>
+
+          {/* Progress Bar */}
+          {step === "processing" && (
+            <div className="mt-4">
+              <div className="h-2 bg-neutral-800 border border-neutral-700 overflow-hidden">
+                <div 
+                  className="h-full bg-accent transition-all duration-500 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <div className="mt-2 text-center text-xs text-neutral-500 font-mono">
+                {progress > 0 ? `${progress}% COMPLETE` : "INITIALIZING..."}
+              </div>
+            </div>
+          )}
 
           {/* Error Display */}
           {error && (
