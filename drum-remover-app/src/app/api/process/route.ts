@@ -473,6 +473,17 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     }
     
     console.log("Starting Spleeter separation...");
+    console.log(`Debug - MODEL_PATH: ${process.env.MODEL_PATH}`);
+    try {
+        const modelPath = path.join(process.env.MODEL_PATH || "pretrained_models", "4stems");
+        if (fs.existsSync(modelPath)) {
+            console.log(`Debug - Model contents: ${fs.readdirSync(modelPath).join(", ")}`);
+        } else {
+            console.log(`Debug - Model path not found: ${modelPath}`);
+        }
+    } catch (e) {
+        console.log("Debug - Failed to check model path", e);
+    }
     
     await new Promise<void>((resolve, reject) => {
       // spleeter separate -p spleeter:4stems -o {outputDir} {inputFile}

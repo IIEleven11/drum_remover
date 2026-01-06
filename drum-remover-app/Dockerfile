@@ -27,6 +27,9 @@ ENV OMP_NUM_THREADS=1
 ENV TF_NUM_INTRAOP_THREADS=1
 ENV TF_NUM_INTEROP_THREADS=1
 
+# Limit Node.js memory usage to leave room for Spleeter (essential for 1GB VPS)
+ENV NODE_OPTIONS="--max-old-space-size=256"
+
 # 3.1 Pre-download Spleeter model (4stems) to avoid runtime download/extraction OOMs
 # We download and extract it to /app/pretrained_models/4stems where Spleeter expects it
 RUN mkdir -p /app/pretrained_models/4stems && \
