@@ -162,10 +162,10 @@ export default function Home() {
 
       {/* Side Decorations */}
       <div className="absolute left-8 top-1/2 -translate-y-1/2 -rotate-90 origin-left corner-text hidden lg:block text-neutral-600">
-        SYSTEM READY
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~
       </div>
       <div className="absolute right-8 top-1/2 -translate-y-1/2 rotate-90 origin-right corner-text hidden lg:block text-neutral-600">
-        AUDIO PROCESSING UNIT
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~
       </div>
 
       <main className="w-full max-w-2xl z-10">
@@ -254,7 +254,7 @@ export default function Home() {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-6">
                 <div className="font-mono text-xs text-accent uppercase tracking-widest animate-pulse">
-                  /// PROCESSING AUDIO STREAMS ///
+                  /// PROCESSING AUDIO ///
                 </div>
               </div>
             </div>

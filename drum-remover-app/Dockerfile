@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 # Install CPU-only version of PyTorch to save space and build time
 # Note: --break-system-packages is needed for Debian 12+ (Bookworm) inside containers
 RUN pip3 install torch torchaudio --index-url https://download.pytorch.org/whl/cpu --break-system-packages
-RUN pip3 install -U demucs yt-dlp --break-system-packages
+RUN pip3 install -U demucs yt-dlp spleeter --break-system-packages
 
 # 2.1. Pre-download the Demucs model to avoid first-run delay
 # This caches the model in the image so the first request is fast
