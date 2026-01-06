@@ -19,19 +19,31 @@ export async function GET(request: NextRequest) {
 
   // Security check: prevent directory traversal
   const safeFilename = path.basename(filename);
-  const filePath = path.join("/tmp", safeFilename);
+  // For Docker, files are in /app/public/audio/; for Vercel, they're in /tmp
+  const audioDir = process.env.VERCEL ? "/tmp" : "/app/public/audio";
+  const filePath = path.join(audioDir, safeFilename);
 
   if (!fs.existsSync(filePath)) {
+    console.log(`File not found at: ${filePath}`);
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
 
   try {
     const fileBuffer = fs.readFileSync(filePath);
+    const fileStats = fs.statSync(filePath);
+    
+    // Check if this is a request for inline playback vs download
+    const mode = searchParams.get("mode"); // "play" for inline, default is download
+    const contentDisposition = mode === "play" 
+      ? `inline; filename="${safeFilename}"`
+      : `attachment; filename="${safeFilename}"`;
     
     return new NextResponse(fileBuffer, {
       headers: {
         "Content-Type": "audio/mpeg",
-        "Content-Disposition": `attachment; filename="${safeFilename}"`,
+        "Content-Disposition": contentDisposition,
+        "Content-Length": fileStats.size.toString(),
+        "Accept-Ranges": "bytes",
       },
     });
   } catch (error) {

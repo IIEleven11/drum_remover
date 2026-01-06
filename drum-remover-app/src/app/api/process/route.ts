@@ -642,11 +642,8 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     job.status = "completed";
     const finalFileName = path.basename(outputExists ? finalOutputFile : wavOutput);
     
-    if (process.env.VERCEL) {
-      job.downloadUrl = `/api/download?file=${finalFileName}`;
-    } else {
-      job.downloadUrl = `/audio/${finalFileName}`;
-    }
+    // Always use the download API endpoint (static serving doesn't work with Next.js standalone)
+    job.downloadUrl = `/api/download?file=${encodeURIComponent(finalFileName)}`;
     
     jobs.set(jobId, job);
 
@@ -669,6 +666,3 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     jobs.set(jobId, job);
   }
 }
-
-
-
