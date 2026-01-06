@@ -499,7 +499,7 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     
     if (fs.existsSync(path.join(venvPath, "bin", "activate"))) {
        shell = "/bin/bash";
-       shellArgs = ["-c", `source ${venvPath}/bin/activate && python -m demucs --mp3 -j 0 --segment 4 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`];
+       shellArgs = ["-c", `source ${venvPath}/bin/activate && python -m demucs --mp3  --segment 7 --two-stems drums -o "${demucsOutputDir}" "${demucsInput}"`];
     } else {
        // Assume system install (e.g. Docker)
        // Use --mp3 to output MP3 directly (faster, smaller files)
