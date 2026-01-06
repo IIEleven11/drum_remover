@@ -312,7 +312,7 @@ export default function Home() {
               </div>
               <audio
                 controls
-                src={downloadUrl.includes("?") ? `${downloadUrl}&mode=play` : `${downloadUrl}?mode=play`}
+                src={downloadUrl}
                 className="w-full h-8 invert opacity-80 hover:opacity-100 transition-opacity"
                 preload="metadata"
               >

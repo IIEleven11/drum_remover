@@ -642,7 +642,7 @@ async function processAudio(jobId: string, videoId: string, title: string) {
     job.status = "completed";
     const finalFileName = path.basename(outputExists ? finalOutputFile : wavOutput);
     
-    // Always use the download API endpoint (static serving doesn't work with Next.js standalone)
+    // Always use /api/download - Next.js standalone doesn't serve static files from /public
     job.downloadUrl = `/api/download?file=${encodeURIComponent(finalFileName)}`;
     
     jobs.set(jobId, job);
