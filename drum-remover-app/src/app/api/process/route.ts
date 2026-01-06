@@ -490,9 +490,9 @@ async function processAudio(jobId: string, videoId: string, title: string) {
       });
       spleeter.stderr.on("data", (data) => console.log(`Spleeter stderr: ${data}`));
       
-      spleeter.on("close", (code) => {
+      spleeter.on("close", (code, signal) => {
         if (code === 0) resolve();
-        else reject(new Error(`Spleeter exited with code ${code}`));
+        else reject(new Error(`Spleeter exited with code ${code} and signal ${signal}`));
       });
       
       spleeter.on("error", (err) => reject(err));

@@ -6,17 +6,27 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     ffmpeg \
+    libsndfile1 \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Install Python Tools (Demucs for drums, yt-dlp for downloading)
 # Install CPU-only version of PyTorch to save space and build time
 # Note: --break-system-packages is needed for Debian 12+ (Bookworm) inside containers
-RUN pip3 install torch torchaudio --index-url https://download.pytorch.org/whl/cpu --break-system-packages
-RUN pip3 install -U yt-dlp spleeter --no-cache-dir --break-system-packages 
-
+# Demucs removed to save space, using Spleeter instead.
+# Start with numpy<2 to avoid Spleeter/TensorFlow compatibility issues
+RUN pip3 install "numpy<2" --break-system-packages
+RUN pip3 install -U yt-dlp spleeter --no-cache-dir --break-system-packages
 
 # 3. Set up the App Directory
 WORKDIR /app
+
+# 3.1 Pre-download Spleeter model (4stems) to avoid runtime download/extraction OOMs
+# We download and extract it to /app/pretrained_models/4stems where Spleeter expects it
+RUN mkdir -p /app/pretrained_models/4stems && \
+    wget -q https://github.com/deezer/spleeter/releases/download/v1.4.0/4stems.tar.gz -O /tmp/4stems.tar.gz && \
+    tar -xzf /tmp/4stems.tar.gz -C /app/pretrained_models/4stems && \
+    rm /tmp/4stems.tar.gz
 
 # 4. Install Node.js Dependencies
 COPY package*.json ./
