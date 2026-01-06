@@ -503,7 +503,7 @@ async function processAudio(jobId: string, videoId: string, title: string) {
              // Slowly increment from wherever we are (even 20%) up to 85%
              if (current.progress < 85) {
                  // Slower increment to span roughly 60s (2s interval -> 30 ticks -> ~2% per tick)
-                 current.progress += 2;
+                 current.progress += Math.random() * (10 - 1) + 1; //use a more random looking formula
                  jobs.set(jobId, current);
              }
         }
