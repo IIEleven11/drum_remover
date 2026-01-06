@@ -460,7 +460,7 @@ async function processAudio(jobId: string, videoId: string, title: string) {
 
     // Step 2: Process audio with Spleeter
     job.status = "processing";
-    job.progress = 0;
+    job.progress = 20; // Start at 20% immediately (download done)
     jobs.set(jobId, job);
 
     console.log("Processing with Spleeter...");
@@ -499,9 +499,10 @@ async function processAudio(jobId: string, videoId: string, title: string) {
       // Simulate progress for the heavy separate step (it can take 30-60s)
       const progressInterval = setInterval(() => {
         const current = jobs.get(jobId);
-        if (current && current.status === "processing" && current.progress) {
-             // Only auto-increment if we are in the "Separating" phase (approx 40-80%)
-             if (current.progress >= 40 && current.progress < 85) {
+        if (current && current.status === "processing" && typeof current.progress === 'number') {
+             // Slowly increment from wherever we are (even 20%) up to 85%
+             if (current.progress < 85) {
+                 // Slower increment to span roughly 60s (2s interval -> 30 ticks -> ~2% per tick)
                  current.progress += 2;
                  jobs.set(jobId, current);
              }
@@ -514,17 +515,14 @@ async function processAudio(jobId: string, videoId: string, title: string) {
           
           let updated = false;
           if (output.includes("Loading audio")) {
-             job.progress = 10; 
-             updated = true;
-          } else if (output.includes("Audio data loaded")) {
-             job.progress = 20;
+             job.progress = Math.max(job.progress || 0, 30);
              updated = true;
           } else if (output.includes("Separating")) {
-             job.progress = 40; // Separation starts
+             job.progress = Math.max(job.progress || 0, 50); // Ensure we jump ahead if possible
              updated = true;
           } else if (output.includes("written")) {
              // When files are written, jump to end of separation phase
-             job.progress = (job.progress || 85) + 3;
+             job.progress = Math.max(job.progress || 0, 90);
              updated = true;
           }
           
