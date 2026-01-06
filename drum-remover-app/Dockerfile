@@ -14,10 +14,6 @@ RUN apt-get update && apt-get install -y \
 RUN pip3 install torch torchaudio --index-url https://download.pytorch.org/whl/cpu --break-system-packages
 RUN pip3 install -U yt-dlp spleeter --no-cache-dir --break-system-packages 
 
-# 2.1. Pre-download the Demucs model to avoid first-run delay
-# This caches the model in the image so the first request is fast
-ARG DEMUCS_MODEL=htdemucs
-RUN python3 -c "from demucs.pretrained import get_model; get_model('${DEMUCS_MODEL}')"
 
 # 3. Set up the App Directory
 WORKDIR /app
@@ -40,19 +36,6 @@ RUN mkdir -p /app/public/audio && chmod 777 /app/public/audio
 
 # 9. Expose the port (default 3000)
 EXPOSE 3000
-
-# 10. Performance tuning environment variables (can be overridden at runtime)
-# DEMUCS_MODEL: htdemucs (default, best quality), hdemucs_mmi (faster), mdx_extra (fastest)
-# DEMUCS_SEGMENT: smaller = faster but lower quality (default 5, range 3-10)
-# DEMUCS_JOBS: parallel segment processing (default 2, increase with more RAM)
-# OMP_NUM_THREADS: CPU threads per job (default 4, match your VPS cores)
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV DEMUCS_MODEL=htdemucs
-ENV DEMUCS_SEGMENT=5
-ENV DEMUCS_JOBS=2
-ENV OMP_NUM_THREADS=4
-ENV DEMUCS_MP3_BITRATE=192
 
 # 11. Run Next.js standalone server
 CMD ["node", ".next/standalone/server.js"]
